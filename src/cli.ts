@@ -21,13 +21,14 @@ function formatTextReport(report: MutationReport, showFixes: boolean): string {
     `Seed:     ${report.seedSource} (valid CALM: ${report.seedValidAgainstCalm}, valid Pattern: ${report.seedValidAgainstPattern})`
   );
   lines.push(
-    `Score:    ${report.mutationScore}% (${report.killed}/${report.validMutants} valid mutants killed, ${report.survived} survived, ${report.invalidCalm} invalid-calm skipped) [${report.durationMs}ms]`
+    `Score:    ${report.mutationScore}% (${report.killed}/${report.validMutants} valid mutants killed, ${report.waived} waived, ${report.survived} survived, ${report.invalidCalm} invalid-calm skipped) [${report.durationMs}ms]`
   );
   lines.push('');
 
   const survivors = report.results.filter((r) => r.outcome === 'survived');
+  const waivedResults = report.results.filter((r) => r.outcome === 'waived');
   if (survivors.length === 0) {
-    lines.push('PASS: All valid adversarial mutants were rejected by the pattern.');
+    lines.push('PASS: All unwaived valid adversarial mutants were rejected by the pattern.');
   } else {
     lines.push(`SURVIVING MUTANTS (${survivors.length} pattern bypasses):`);
     for (const res of survivors) {
@@ -35,6 +36,18 @@ function formatTextReport(report: MutationReport, showFixes: boolean): string {
       const cliTag = res.cliConfirmed ? ' [cli-confirmed]' : '';
       lines.push(
         `  [SURVIVED] (${m.severity.toUpperCase()}) [${m.operator}] ${m.description}${cliTag}`
+      );
+    }
+  }
+
+  if (waivedResults.length > 0) {
+    lines.push('');
+    lines.push(`WAIVED MUTANTS (${waivedResults.length} documented exceptions):`);
+    for (const res of waivedResults) {
+      const m = res.mutant;
+      const ownerTag = res.waiver?.owner ? ` (owner: ${res.waiver.owner})` : '';
+      lines.push(
+        `  [WAIVED] [${m.operator}] ${m.id} — ${res.waiver?.reason ?? ''}${ownerTag}`
       );
     }
   }
@@ -94,6 +107,7 @@ program
   .version('0.1.0')
   .requiredOption('-p, --pattern <path>', 'Path to CALM .pattern.json file')
   .option('-a, --seed <path>', 'Optional conforming architecture JSON seed (auto-generated if omitted)')
+  .option('-w, --waivers <path>', 'Optional waiver JSON file for documented pattern exceptions')
   .option('--operators <list>', `Comma-separated operators (${ALL_OPERATORS.join(',')})`)
   .option('--min-score <number>', 'Minimum required mutation score (0-100)', '0')
   .option('--format <type>', 'Output format: text | json | sarif', 'text')
@@ -112,6 +126,7 @@ program
     const report = await runMutationAudit({
       patternPath: opts.pattern,
       seedPath: opts.seed,
+      waiversPath: opts.waivers,
       operators,
       verifyCli: Boolean(opts.verifyCli),
     });

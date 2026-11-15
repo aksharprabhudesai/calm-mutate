@@ -5,3 +5,4 @@ export { resolveSeedArchitecture, fillPlaceholders } from './seed.js';
 export { ALL_OPERATORS, generateMutants } from './operators/index.js';
 export { suggestSchemaFixes, applySchemaPatches } from './fix-suggester.js';
 export { renderCounterexampleSvg } from './svg-renderer.js';
+export { loadWaivers, isWaiverExpired, findMatchingWaiver } from './waivers.js';

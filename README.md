@@ -80,6 +80,7 @@ Usage: calm-mutate [options]
 |---|---|---|---|
 | `--pattern <path>` | `-p` | *(required)* | Path to CALM `.pattern.json` file |
 | `--seed <path>` | `-a` | auto-generated | Optional conforming architecture JSON seed |
+| `--waivers <path>` | `-w` | | Optional waiver JSON file for documented pattern exceptions |
 | `--operators <list>` | | all 7 operators | Comma-separated subset of operators to run |
 | `--min-score <number>` | | `0` | Minimum required mutation score (`0`–`100`); exits non-zero if below |
 | `--format <type>` | | `text` | Output format: `text`, `json`, or `sarif` |
@@ -157,17 +158,53 @@ PASS: All valid adversarial mutants were rejected by the pattern.
 
 ---
 
+## Waivers (Documented Exceptions)
+
+Not every surviving mutant is an accidental bug—sometimes a pattern intentionally leaves `nodes[]` open for teams to extend or makes a metadata property optional. You can make those exceptions **explicit and code-reviewed** with a `.waivers.json` file:
+
+```json
+{
+  "waivers": [
+    {
+      "mutantId": "rogue-node-service",
+      "reason": "Blueprint intentionally allows teams to add extra downstream services",
+      "owner": "platform-architecture",
+      "expires": "2027-01-01"
+    }
+  ]
+}
+```
+
+Pass it with `--waivers`:
+
+```bash
+calm-mutate -p patterns/payment.pattern.json --waivers patterns/payment.waivers.json --min-score 100
+```
+
+- Each waiver entry requires a non-empty `reason` and at least `mutantId` or `operator` (plus optional `targetId`, `pattern` scope, `owner`, and ISO `expires` date).
+- Active waivers mark matching survivors as `[WAIVED]` instead of `[SURVIVED]`, keep CI green, and are excluded from `--fix` suggestions.
+- Expired waivers are automatically ignored so temporary exceptions re-trigger CI failures.
+
+---
+
 ## CI/CD Integration (SARIF + Score Gate)
 
-Fail a pull request if the pattern's mutation score drops below `95%`, and upload SARIF results to GitHub Code Scanning:
+Use a single GitHub Actions workflow to audit every `*.pattern.json` in your repo (with per-pattern `*.waivers.json` if present) and upload SARIF results to GitHub Code Scanning:
 
 ```yaml
 - name: Run CALM Pattern Mutation Audit
   run: |
-    npx calm-mutate \
-      -p patterns/my-service.pattern.json \
-      --min-score 95 \
-      --format sarif > calm-mutate.sarif
+    for pattern in $(find patterns -name "*.pattern.json"); do
+      waiver="${pattern%.pattern.json}.waivers.json"
+      if [ -f "$waiver" ]; then
+        npx calm-mutate -p "$pattern" --waivers "$waiver" --min-score 100
+      else
+        npx calm-mutate -p "$pattern" --min-score 100
+      fi
+    done
+
+- name: Export SARIF for a pattern
+  run: npx calm-mutate -p patterns/my-service.pattern.json --format sarif > calm-mutate.sarif
 
 - name: Upload SARIF
   if: always()

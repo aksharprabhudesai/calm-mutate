@@ -122,7 +122,21 @@ export interface Mutant {
   };
 }
 
-export type MutantOutcome = 'killed' | 'survived' | 'invalid-calm';
+export type MutantOutcome = 'killed' | 'survived' | 'waived' | 'invalid-calm';
+
+export interface WaiverEntry {
+  mutantId?: string;
+  operator?: MutationOperatorId;
+  targetId?: string;
+  pattern?: string;
+  reason: string;
+  owner?: string;
+  expires?: string;
+}
+
+export interface WaiverFile {
+  waivers: WaiverEntry[];
+}
 
 export interface MutationResult {
   mutant: Mutant;
@@ -130,6 +144,7 @@ export interface MutationResult {
   calmErrors: string[];
   patternErrors: string[];
   cliConfirmed?: boolean;
+  waiver?: WaiverEntry;
 }
 
 export interface SchemaPatchOperation {
@@ -149,6 +164,7 @@ export interface MutationReport {
   validMutants: number;
   killed: number;
   survived: number;
+  waived: number;
   invalidCalm: number;
   mutationScore: number;
   durationMs: number;
@@ -159,6 +175,7 @@ export interface MutationReport {
 export interface MutateOptions {
   patternPath: string;
   seedPath?: string;
+  waiversPath?: string;
   operators?: MutationOperatorId[];
   verifyCli?: boolean;
   minScore?: number;
