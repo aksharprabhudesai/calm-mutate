@@ -176,6 +176,7 @@ export interface MutateOptions {
   patternPath: string;
   seedPath?: string;
   waiversPath?: string;
+  urlMappingPath?: string;
   operators?: MutationOperatorId[];
   verifyCli?: boolean;
   minScore?: number;

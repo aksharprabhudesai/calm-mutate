@@ -20,10 +20,11 @@ export async function runMutationAudit(options: MutateOptions): Promise<Mutation
 
   const { architecture: seed, seedSource } = await resolveSeedArchitecture(
     absPatternPath,
-    options.seedPath
+    options.seedPath,
+    options.urlMappingPath
   );
 
-  const validator = new DifferentialValidator(pattern);
+  const validator = new DifferentialValidator(pattern, options.urlMappingPath);
   const seedCalmErrors = validator.validateBaseCalm(seed);
   const seedPatternErrors = validator.validatePattern(seed);
 
@@ -55,7 +56,11 @@ export async function runMutationAudit(options: MutateOptions): Promise<Mutation
       let outcome: 'survived' | 'killed' | 'waived' = 'survived';
 
       if (options.verifyCli) {
-        const cliRes = await verifyWithCalmCli(absPatternPath, mutant.architecture);
+        const cliRes = await verifyWithCalmCli(
+          absPatternPath,
+          mutant.architecture,
+          options.urlMappingPath
+        );
         cliConfirmed = !cliRes.hasErrors;
         if (cliRes.hasErrors) {
           outcome = 'killed';
@@ -99,7 +104,7 @@ export async function runMutationAudit(options: MutateOptions): Promise<Mutation
 
   const validMutants = killed + survived + waived;
   const mutationScore =
-    validMutants === 0 ? 100 : Math.round(((killed + waived) / validMutants) * 1000) / 10;
+    validMutants === 0 ? 0 : Math.round(((killed + waived) / validMutants) * 1000) / 10;
 
   const suggestedFixes = suggestSchemaFixes(pattern, results);
   const durationMs = Math.round(performance.now() - start);

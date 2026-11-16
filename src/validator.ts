@@ -253,9 +253,22 @@ export class DifferentialValidator {
   private readonly calmValidate: ValidateFunction;
   private readonly patternValidate: ValidateFunction;
 
-  constructor(pattern: CalmPattern) {
+  constructor(pattern: CalmPattern, urlMappingPath?: string) {
     const prefixes = collectCalmRefPrefixes(pattern);
     const ajv = createCalmAjv(prefixes);
+
+    if (urlMappingPath) {
+      const absMapping = path.resolve(urlMappingPath);
+      const mappingDir = path.dirname(absMapping);
+      const mapping = JSON.parse(fs.readFileSync(absMapping, 'utf8')) as Record<string, string>;
+      for (const [url, relPath] of Object.entries(mapping)) {
+        const targetFile = path.resolve(mappingDir, relPath);
+        const schemaObj = JSON.parse(fs.readFileSync(targetFile, 'utf8')) as Record<string, unknown>;
+        if (!ajv.getSchema(url)) {
+          ajv.addSchema({ ...schemaObj, $id: url }, url);
+        }
+      }
+    }
 
     const calmSchema = ajv.getSchema('https://calm.finos.org/release/1.3/meta/calm.json');
     if (!calmSchema) {
@@ -285,7 +298,8 @@ export class DifferentialValidator {
 
 export async function verifyWithCalmCli(
   patternPath: string,
-  arch: CalmArchitecture
+  arch: CalmArchitecture,
+  urlMappingPath?: string
 ): Promise<{ hasErrors: boolean; rawOutput: string }> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'calm-mutate-cli-'));
   const tmpArch = path.join(tmpDir, 'mutant.architecture.json');
@@ -293,11 +307,13 @@ export async function verifyWithCalmCli(
     fs.writeFileSync(tmpArch, JSON.stringify(arch, null, 2), 'utf8');
     const cliBin = resolveCalmCliBin();
     try {
-      const { stdout, stderr } = await execFileAsync(
-        process.execPath,
-        [cliBin, 'validate', '-p', path.resolve(patternPath), '-a', tmpArch],
-        { timeout: 15000 }
-      );
+      const args = ['validate', '-p', path.resolve(patternPath), '-a', tmpArch];
+      if (urlMappingPath) {
+        args.push('-u', path.resolve(urlMappingPath));
+      }
+      const { stdout, stderr } = await execFileAsync(process.execPath, [cliBin, ...args], {
+        timeout: 15000,
+      });
       const combined = `${stdout}\n${stderr}`;
       const hasErrors = /"hasErrors":\s*true/.test(combined);
       return { hasErrors, rawOutput: combined };

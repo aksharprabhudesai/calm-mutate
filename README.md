@@ -81,6 +81,7 @@ Usage: calm-mutate [options]
 | `--pattern <path>` | `-p` | *(required)* | Path to CALM `.pattern.json` file |
 | `--seed <path>` | `-a` | auto-generated | Optional conforming architecture JSON seed |
 | `--waivers <path>` | `-w` | | Optional waiver JSON file for documented pattern exceptions |
+| `--url-to-local-file-mapping <path>` | `-u` | | Optional JSON file mapping remote `$ref` schema URLs to local files |
 | `--operators <list>` | | all 7 operators | Comma-separated subset of operators to run |
 | `--min-score <number>` | | `0` | Minimum required mutation score (`0`–`100`); exits non-zero if below |
 | `--format <type>` | | `text` | Output format: `text`, `json`, or `sarif` |

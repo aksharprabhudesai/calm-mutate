@@ -1,12 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { resolveCalmCliBin } from './validator.js';
 import type { CalmArchitecture } from './types.js';
-
-const execFileAsync = promisify(execFile);
 
 const PLACEHOLDER_RE = /^\[\[\s*([A-Z0-9_]+)\s*\]\]$/;
 
@@ -37,9 +34,47 @@ export function fillPlaceholders<T>(value: T): T {
   return value;
 }
 
+function runCalmGenerate(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cliBin = resolveCalmCliBin();
+    const child = spawn(process.execPath, [cliBin, ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`calm generate timed out after 15000ms: ${stderr}`));
+    }, 15000);
+
+    // Auto-select default choices if calm generate prompts interactively for oneOf/anyOf
+    child.stdin.write('\n'.repeat(20));
+    child.stdin.end();
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`calm generate exited with code ${code}: ${stderr}`));
+      }
+    });
+  });
+}
+
 export async function resolveSeedArchitecture(
   patternPath: string,
-  seedPath?: string
+  seedPath?: string,
+  urlMappingPath?: string
 ): Promise<{ architecture: CalmArchitecture; seedSource: 'generated' | 'provided' }> {
   if (seedPath) {
     const raw = JSON.parse(fs.readFileSync(path.resolve(seedPath), 'utf8')) as CalmArchitecture;
@@ -49,12 +84,11 @@ export async function resolveSeedArchitecture(
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'calm-mutate-seed-'));
   const tmpOut = path.join(tmpDir, 'seed.architecture.json');
   try {
-    const cliBin = resolveCalmCliBin();
-    await execFileAsync(
-      process.execPath,
-      [cliBin, 'generate', '-p', path.resolve(patternPath), '-o', tmpOut],
-      { timeout: 15000 }
-    );
+    const args = ['generate', '-p', path.resolve(patternPath), '-o', tmpOut];
+    if (urlMappingPath) {
+      args.push('-u', path.resolve(urlMappingPath));
+    }
+    await runCalmGenerate(args);
     const raw = JSON.parse(fs.readFileSync(tmpOut, 'utf8')) as CalmArchitecture;
     return {
       architecture: fillPlaceholders(raw),

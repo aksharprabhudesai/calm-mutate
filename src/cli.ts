@@ -27,7 +27,11 @@ function formatTextReport(report: MutationReport, showFixes: boolean): string {
 
   const survivors = report.results.filter((r) => r.outcome === 'survived');
   const waivedResults = report.results.filter((r) => r.outcome === 'waived');
-  if (survivors.length === 0) {
+  if (report.validMutants === 0) {
+    lines.push(
+      `WARN: 0 valid mutants evaluated (seed valid against CALM: ${report.seedValidAgainstCalm}). Check the pattern or provide --seed.`
+    );
+  } else if (survivors.length === 0) {
     lines.push('PASS: All unwaived valid adversarial mutants were rejected by the pattern.');
   } else {
     lines.push(`SURVIVING MUTANTS (${survivors.length} pattern bypasses):`);
@@ -108,6 +112,7 @@ program
   .requiredOption('-p, --pattern <path>', 'Path to CALM .pattern.json file')
   .option('-a, --seed <path>', 'Optional conforming architecture JSON seed (auto-generated if omitted)')
   .option('-w, --waivers <path>', 'Optional waiver JSON file for documented pattern exceptions')
+  .option('-u, --url-to-local-file-mapping <path>', 'Optional JSON file mapping remote schema URLs to local files')
   .option('--operators <list>', `Comma-separated operators (${ALL_OPERATORS.join(',')})`)
   .option('--min-score <number>', 'Minimum required mutation score (0-100)', '0')
   .option('--format <type>', 'Output format: text | json | sarif', 'text')
@@ -127,6 +132,7 @@ program
       patternPath: opts.pattern,
       seedPath: opts.seed,
       waiversPath: opts.waivers,
+      urlMappingPath: opts.urlToLocalFileMapping,
       operators,
       verifyCli: Boolean(opts.verifyCli),
     });

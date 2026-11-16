@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   DifferentialValidator,
@@ -153,5 +156,49 @@ describe('DifferentialValidator', () => {
     };
 
     expect(() => new DifferentialValidator(legacyPattern)).not.toThrow();
+  });
+
+  it('resolves custom external $ref schemas via urlMappingPath', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'calm-mutate-urlmap-'));
+    try {
+      const stdFile = path.join(tmpDir, 'org.standard.json');
+      const mapFile = path.join(tmpDir, 'url-mapping.json');
+      fs.writeFileSync(
+        stdFile,
+        JSON.stringify({
+          type: 'object',
+          required: ['owner'],
+          properties: { owner: { type: 'string' } },
+        })
+      );
+      fs.writeFileSync(
+        mapFile,
+        JSON.stringify({
+          'https://example.com/standards/org.standard.json': 'org.standard.json',
+        })
+      );
+
+      const mappedPattern: CalmPattern = {
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        properties: {
+          nodes: {
+            type: 'array',
+            items: {
+              allOf: [
+                { $ref: 'https://calm.finos.org/release/1.3/meta/core.json#/defs/node' },
+                { $ref: 'https://example.com/standards/org.standard.json' },
+              ],
+            },
+          },
+        },
+        required: ['nodes', 'relationships'],
+      };
+
+      const validator = new DifferentialValidator(mappedPattern, mapFile);
+      expect(validator.validatePattern(validArch).length).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
