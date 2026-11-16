@@ -52,16 +52,24 @@ function runCalmGenerate(args: string[]): Promise<void> {
     }, 15000);
 
     // Auto-select default choices if calm generate prompts interactively for oneOf/anyOf
-    child.stdin.write('\n'.repeat(20));
-    child.stdin.end();
+    const promptInterval = setInterval(() => {
+      if (!child.stdin.destroyed) {
+        child.stdin.write('\n');
+      }
+    }, 50);
 
     child.on('error', (err) => {
       clearTimeout(timer);
+      clearInterval(promptInterval);
       reject(err);
     });
 
     child.on('close', (code) => {
       clearTimeout(timer);
+      clearInterval(promptInterval);
+      if (!child.stdin.destroyed) {
+        child.stdin.end();
+      }
       if (code === 0) {
         resolve();
       } else {
